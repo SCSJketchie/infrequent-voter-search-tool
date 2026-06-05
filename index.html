@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voter Lookup Prototype</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <p class="eyebrow">Prototype</p>
+      <h1>Voter Lookup</h1>
+      <p class="lede">Search the test dataset by name, address, NCID, county, city, status, or precinct.</p>
+    </header>
+
+    <section class="controls" aria-label="Search and filters">
+      <label>
+        Search
+        <input id="searchInput" type="search" placeholder="Try: Wake, Martin, AA123456, Raleigh..." />
+      </label>
+
+      <label>
+        County
+        <select id="countyFilter">
+          <option value="">All counties</option>
+        </select>
+      </label>
+
+      <label>
+        Status
+        <select id="statusFilter">
+          <option value="">All statuses</option>
+        </select>
+      </label>
+
+      <button id="clearFilters" type="button">Clear</button>
+    </section>
+
+    <section class="summary" aria-live="polite">
+      <span id="resultCount">Loading data…</span>
+      <div class="download-links" aria-label="Download options">
+        <a href="data/voters.csv" download>Download Full Voter List</a>
+        <a id="downloadFiltered" href="#" download="selected-voter-list.csv">Download Selected Voter List</a>
+      </div>
+    </section>
+
+    <div class="table-wrap">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th>County</th>
+            <th>First Name</th>
+            <th>Last Name</th>
+            <th>Residential Address</th>
+            <th>City</th>
+            <th>ZIP</th>
+            <th>NCID</th>
+            <th>Status</th>
+            <th>Precinct</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
