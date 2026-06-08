@@ -1,5 +1,8 @@
-const DATA_URL = "data/infrequent-voters.csv";
-const COLUMNS = [
+const COUNTY_MANIFEST = "data/counties/counties.json";
+const COUNTY_BASE_PATH = "data/counties/";
+const PAGE_SIZE = 100;
+
+const columns = [
   "county_desc",
   "full-name",
   "residential-address",
@@ -7,204 +10,269 @@ const COLUMNS = [
   "voter_status_desc",
   "ncid"
 ];
-const COLUMN_LABELS = {
-  "county_desc": "County",
-  "full-name": "Full Name",
-  "residential-address": "Residential Address",
-  "precinct_desc": "Precinct",
-  "voter_status_desc": "Voter Status",
-  "ncid": "NCID"
+
+let countyManifest = [];
+let loadedRows = [];
+let filteredRows = [];
+let currentPage = 1;
+
+const els = {
+  countySearch: document.getElementById("countySearch"),
+  countyList: document.getElementById("countyList"),
+  selectAllCounties: document.getElementById("selectAllCounties"),
+  clearCounties: document.getElementById("clearCounties"),
+  loadCounties: document.getElementById("loadCounties"),
+  loadStatus: document.getElementById("loadStatus"),
+  globalSearch: document.getElementById("globalSearch"),
+  statusFilter: document.getElementById("statusFilter"),
+  precinctFilter: document.getElementById("precinctFilter"),
+  downloadLoaded: document.getElementById("downloadLoaded"),
+  downloadFiltered: document.getElementById("downloadFiltered"),
+  resultCount: document.getElementById("resultCount"),
+  tbody: document.querySelector("#resultsTable tbody"),
+  prevPage: document.getElementById("prevPage"),
+  nextPage: document.getElementById("nextPage"),
+  pageInfo: document.getElementById("pageInfo")
 };
-const MAX_DISPLAY_ROWS = 1000;
 
-const searchInput = document.querySelector("#searchInput");
-const countyFilter = document.querySelector("#countyFilter");
-const statusFilter = document.querySelector("#statusFilter");
-const precinctFilter = document.querySelector("#precinctFilter");
-const clearFilters = document.querySelector("#clearFilters");
-const resultCount = document.querySelector("#resultCount");
-const displayNote = document.querySelector("#displayNote");
-const tableBody = document.querySelector("#resultsTable tbody");
-const downloadFiltered = document.querySelector("#downloadFiltered");
+init();
 
-let rows = [];
-let currentRows = [];
-let currentDownloadUrl = null;
-let debounceTimer = null;
-
-fetch(DATA_URL)
-  .then(response => {
-    if (!response.ok) throw new Error(`Could not load ${DATA_URL}`);
-    return response.text();
-  })
-  .then(csvText => {
-    rows = parseCSV(csvText);
-    populateFilters(rows);
-    renderTable(rows);
-  })
-  .catch(error => {
-    resultCount.textContent = "Data could not be loaded.";
-    displayNote.textContent = "Check that data/infrequent-voters.csv exists and that the site is being served from a web server, not opened directly as a file.";
+async function init() {
+  try {
+    const response = await fetch(COUNTY_MANIFEST);
+    if (!response.ok) throw new Error(`Could not load ${COUNTY_MANIFEST}`);
+    countyManifest = await response.json();
+    renderCountyList();
+    els.loadStatus.textContent = `${countyManifest.length} county file(s) available.`;
+  } catch (error) {
+    els.loadStatus.textContent = "Could not load county list. Check data/counties/counties.json.";
     console.error(error);
-  });
-
-searchInput.addEventListener("input", () => {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(applyFilters, 150);
-});
-countyFilter.addEventListener("change", applyFilters);
-statusFilter.addEventListener("change", applyFilters);
-precinctFilter.addEventListener("change", applyFilters);
-clearFilters.addEventListener("click", () => {
-  searchInput.value = "";
-  countyFilter.value = "";
-  statusFilter.value = "";
-  precinctFilter.value = "";
-  applyFilters();
-});
-
-downloadFiltered.addEventListener("click", event => {
-  if (!currentRows.length) {
-    event.preventDefault();
-    alert("There are no selected records to download.");
   }
-});
-
-function parseCSV(csvText) {
-  const lines = csvText.replace(/^\uFEFF/, "").trim().split(/\r?\n/);
-  const headers = splitCSVLine(lines.shift());
-
-  return lines
-    .filter(line => line.trim() !== "")
-    .map(line => {
-      const values = splitCSVLine(line);
-      return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
-    });
 }
 
-function splitCSVLine(line) {
-  const values = [];
-  let current = "";
-  let insideQuotes = false;
+function renderCountyList() {
+  const term = els.countySearch.value.trim().toLowerCase();
+  const counties = countyManifest.filter(c => c.name.toLowerCase().includes(term));
 
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    const nextChar = line[i + 1];
+  els.countyList.innerHTML = counties.map(c => `
+    <label class="county-option">
+      <input type="checkbox" value="${escapeHtml(c.file)}" data-name="${escapeHtml(c.name)}">
+      <span>${escapeHtml(toTitleCase(c.name))}</span>
+    </label>
+  `).join("");
+}
 
-    if (char === '"' && insideQuotes && nextChar === '"') {
-      current += '"';
-      i++;
-    } else if (char === '"') {
-      insideQuotes = !insideQuotes;
-    } else if (char === "," && !insideQuotes) {
-      values.push(current);
-      current = "";
-    } else {
-      current += char;
+els.countySearch.addEventListener("input", renderCountyList);
+
+els.selectAllCounties.addEventListener("click", () => {
+  els.countyList.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = true);
+});
+
+els.clearCounties.addEventListener("click", () => {
+  els.countyList.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+});
+
+els.loadCounties.addEventListener("click", loadSelectedCounties);
+els.globalSearch.addEventListener("input", applyFilters);
+els.statusFilter.addEventListener("change", applyFilters);
+els.precinctFilter.addEventListener("change", applyFilters);
+els.downloadLoaded.addEventListener("click", () => downloadCsv(loadedRows, "loaded-voter-list.csv"));
+els.downloadFiltered.addEventListener("click", () => downloadCsv(filteredRows, "selected-voter-list.csv"));
+els.prevPage.addEventListener("click", () => { if (currentPage > 1) { currentPage--; renderTable(); } });
+els.nextPage.addEventListener("click", () => {
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  if (currentPage < totalPages) { currentPage++; renderTable(); }
+});
+
+async function loadSelectedCounties() {
+  const selected = Array.from(els.countyList.querySelectorAll("input[type='checkbox']:checked"))
+    .map(cb => ({ file: cb.value, name: cb.dataset.name }));
+
+  if (selected.length === 0) {
+    alert("Select at least one county first.");
+    return;
+  }
+
+  setControlsEnabled(false);
+  loadedRows = [];
+  filteredRows = [];
+  currentPage = 1;
+  els.tbody.innerHTML = "";
+  els.resultCount.textContent = "Loading selected county file(s)...";
+
+  try {
+    for (const county of selected) {
+      els.loadStatus.textContent = `Loading ${toTitleCase(county.name)}...`;
+      const text = await fetchText(COUNTY_BASE_PATH + county.file);
+      const rows = parseCsv(text);
+      loadedRows.push(...rows);
     }
+
+    populateFilterOptions();
+    setControlsEnabled(true);
+    applyFilters();
+    els.loadStatus.textContent = `Loaded ${loadedRows.length.toLocaleString()} voter record(s) from ${selected.length} county file(s).`;
+  } catch (error) {
+    console.error(error);
+    els.loadStatus.textContent = "A county file failed to load. Check filenames in counties.json.";
+    els.resultCount.textContent = "Load failed.";
   }
-
-  values.push(current);
-  return values;
 }
 
-function populateFilters(data) {
-  addOptions(countyFilter, uniqueSorted(data.map(row => row["county_desc"])));
-  addOptions(statusFilter, uniqueSorted(data.map(row => row["voter_status_desc"])));
-  addOptions(precinctFilter, uniqueSorted(data.map(row => row["precinct_desc"])));
+async function fetchText(path) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(`Could not load ${path}`);
+  return await response.text();
 }
 
-function addOptions(selectElement, options) {
-  options.forEach(optionValue => {
-    const option = document.createElement("option");
-    option.value = optionValue;
-    option.textContent = optionValue;
-    selectElement.appendChild(option);
+function setControlsEnabled(enabled) {
+  [els.globalSearch, els.statusFilter, els.precinctFilter, els.downloadLoaded, els.downloadFiltered].forEach(el => {
+    el.disabled = !enabled;
   });
 }
 
-function uniqueSorted(values) {
-  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+function populateFilterOptions() {
+  fillSelect(els.statusFilter, "voter_status_desc", "All statuses");
+  fillSelect(els.precinctFilter, "precinct_desc", "All precincts");
+}
+
+function fillSelect(select, field, defaultLabel) {
+  const values = Array.from(new Set(loadedRows.map(r => r[field]).filter(Boolean))).sort();
+  select.innerHTML = `<option value="">${defaultLabel}</option>` +
+    values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
 }
 
 function applyFilters() {
-  const searchTerm = searchInput.value.trim().toLowerCase();
-  const county = countyFilter.value;
-  const status = statusFilter.value;
-  const precinct = precinctFilter.value;
+  const search = els.globalSearch.value.trim().toLowerCase();
+  const status = els.statusFilter.value;
+  const precinct = els.precinctFilter.value;
 
-  const filteredRows = rows.filter(row => {
-    const matchesSearch = !searchTerm || COLUMNS.some(column =>
-      String(row[column] ?? "").toLowerCase().includes(searchTerm)
-    );
+  filteredRows = loadedRows.filter(row => {
+    if (status && row.voter_status_desc !== status) return false;
+    if (precinct && row.precinct_desc !== precinct) return false;
 
-    const matchesCounty = !county || row["county_desc"] === county;
-    const matchesStatus = !status || row["voter_status_desc"] === status;
-    const matchesPrecinct = !precinct || row["precinct_desc"] === precinct;
+    if (search) {
+      const haystack = columns.map(col => row[col] || "").join(" ").toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
 
-    return matchesSearch && matchesCounty && matchesStatus && matchesPrecinct;
+    return true;
   });
 
-  renderTable(filteredRows);
+  currentPage = 1;
+  renderTable();
 }
 
-function renderTable(data) {
-  currentRows = data;
-  tableBody.innerHTML = "";
+function renderTable() {
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
 
-  const visibleRows = data.slice(0, MAX_DISPLAY_ROWS);
-  const fragment = document.createDocumentFragment();
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
 
-  visibleRows.forEach(row => {
-    const tr = document.createElement("tr");
-    COLUMNS.forEach(column => {
-      const td = document.createElement("td");
-      td.textContent = row[column] ?? "";
-      tr.appendChild(td);
-    });
-    fragment.appendChild(tr);
-  });
+  els.tbody.innerHTML = pageRows.map(row => `
+    <tr>
+      <td>${escapeHtml(row.county_desc)}</td>
+      <td>${escapeHtml(row["full-name"])}</td>
+      <td>${escapeHtml(row["residential-address"])}</td>
+      <td>${escapeHtml(row.precinct_desc)}</td>
+      <td>${escapeHtml(row.voter_status_desc)}</td>
+      <td>${escapeHtml(row.ncid)}</td>
+    </tr>
+  `).join("");
 
-  tableBody.appendChild(fragment);
-  resultCount.textContent = `${data.length.toLocaleString()} of ${rows.length.toLocaleString()} records selected`;
-
-  if (data.length > MAX_DISPLAY_ROWS) {
-    displayNote.textContent = `Showing the first ${MAX_DISPLAY_ROWS.toLocaleString()} selected records. The selected download includes all ${data.length.toLocaleString()} selected records.`;
-  } else {
-    displayNote.textContent = "";
-  }
-
-  updateFilteredDownload(data);
+  els.resultCount.textContent = `${filteredRows.length.toLocaleString()} matching record(s) from ${loadedRows.length.toLocaleString()} loaded record(s).`;
+  els.pageInfo.textContent = `Page ${filteredRows.length ? currentPage : 0} of ${filteredRows.length ? totalPages : 0}`;
+  els.prevPage.disabled = currentPage <= 1;
+  els.nextPage.disabled = currentPage >= totalPages || filteredRows.length === 0;
 }
 
-function updateFilteredDownload(data) {
-  if (currentDownloadUrl) {
-    URL.revokeObjectURL(currentDownloadUrl);
+function downloadCsv(rows, filename) {
+  if (!rows.length) {
+    alert("No records to download.");
+    return;
   }
 
-  const csv = convertRowsToCSV(data);
+  const csv = [columns.join(",")]
+    .concat(rows.map(row => columns.map(col => csvEscape(row[col] || "")).join(",")))
+    .join("\n");
+
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  currentDownloadUrl = URL.createObjectURL(blob);
-
-  downloadFiltered.href = currentDownloadUrl;
-  downloadFiltered.download = "selected-voter-list.csv";
-  downloadFiltered.classList.toggle("disabled", data.length === 0);
-  downloadFiltered.setAttribute("aria-disabled", data.length === 0 ? "true" : "false");
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
-function convertRowsToCSV(data) {
-  const headerLine = COLUMNS.join(",");
-  const dataLines = data.map(row =>
-    COLUMNS.map(column => escapeCSVValue(row[column] ?? "")).join(",")
-  );
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
 
-  return [headerLine, ...dataLines].join("\n");
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        field += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === "," && !inQuotes) {
+      row.push(field);
+      field = "";
+    } else if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") i++;
+      row.push(field);
+      if (row.some(value => value !== "")) rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += char;
+    }
+  }
+
+  if (field || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  const headers = rows.shift();
+  if (!headers) return [];
+
+  return rows.map(values => {
+    const obj = {};
+    headers.forEach((header, index) => {
+      obj[header] = values[index] || "";
+    });
+    return obj;
+  });
 }
 
-function escapeCSVValue(value) {
-  const stringValue = String(value);
-  const needsQuotes = /[",\n\r]/.test(stringValue);
-  const escapedValue = stringValue.replaceAll('"', '""');
+function csvEscape(value) {
+  const str = String(value);
+  if (/[",\n\r]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
 
-  return needsQuotes ? `"${escapedValue}"` : escapedValue;
+function escapeHtml(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function toTitleCase(value = "") {
+  return String(value).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }

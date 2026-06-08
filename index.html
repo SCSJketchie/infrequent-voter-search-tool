@@ -8,67 +8,75 @@
 </head>
 <body>
   <main class="container">
-    <header>
-      <p class="eyebrow">Prototype</p>
+    <header class="site-header">
       <h1>Infrequent Voter Lookup</h1>
-      <p class="lede">Search by name, address, NCID, county, precinct, or voter status.</p>
+      <p class="lede">Select one or more counties, load the voter list, then search, filter, and download results.</p>
     </header>
 
-    <section class="controls" aria-label="Search and filters">
-      <label>
-        Search
-        <input id="searchInput" type="search" placeholder="Try: Smith, Bryson City, EC12345..." />
-      </label>
-
-      <label>
-        County
-        <select id="countyFilter">
-          <option value="">All counties</option>
-        </select>
-      </label>
-
-      <label>
-        Status
-        <select id="statusFilter">
-          <option value="">All statuses</option>
-        </select>
-      </label>
-
-      <label>
-        Precinct
-        <select id="precinctFilter">
-          <option value="">All precincts</option>
-        </select>
-      </label>
-
-      <button id="clearFilters" type="button">Clear</button>
+    <section class="panel">
+      <h2>1. Select counties</h2>
+      <div class="county-actions">
+        <button id="selectAllCounties" type="button">Select all shown</button>
+        <button id="clearCounties" type="button">Clear counties</button>
+        <button id="loadCounties" type="button" class="primary">Load selected counties</button>
+      </div>
+      <input id="countySearch" type="search" placeholder="Filter county list..." aria-label="Filter county list" />
+      <div id="countyList" class="county-list" aria-live="polite"></div>
+      <p id="loadStatus" class="status">County list loading...</p>
     </section>
 
-    <section class="summary" aria-live="polite">
-      <span id="resultCount">Loading data…</span>
-      <div class="download-links" aria-label="Download options">
-        <a href="data/infrequent-voters.csv" download>Download Full Voter List</a>
-        <a id="downloadFiltered" href="#" download="selected-voter-list.csv">Download Selected Voter List</a>
+    <section class="panel controls-panel">
+      <h2>2. Search and filter loaded voters</h2>
+      <div class="controls-grid">
+        <label>
+          Search
+          <input id="globalSearch" type="search" placeholder="Name, address, NCID, county, precinct..." disabled />
+        </label>
+        <label>
+          Status
+          <select id="statusFilter" disabled>
+            <option value="">All statuses</option>
+          </select>
+        </label>
+        <label>
+          Precinct
+          <select id="precinctFilter" disabled>
+            <option value="">All precincts</option>
+          </select>
+        </label>
+      </div>
+      <div class="download-row">
+        <button id="downloadLoaded" type="button" disabled>Download Full Loaded Voter List</button>
+        <button id="downloadFiltered" type="button" disabled>Download Selected Voter List</button>
       </div>
     </section>
 
-    <p id="displayNote" class="display-note"></p>
-
-    <div class="table-wrap">
-      <table id="resultsTable">
-        <thead>
-          <tr>
-            <th>County</th>
-            <th>Full Name</th>
-            <th>Residential Address</th>
-            <th>Precinct</th>
-            <th>Voter Status</th>
-            <th>NCID</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
+    <section class="panel results-panel">
+      <div class="results-header">
+        <h2>Results</h2>
+        <p id="resultCount" class="status">No counties loaded.</p>
+      </div>
+      <div class="table-wrap">
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th>County</th>
+              <th>Name</th>
+              <th>Residential Address</th>
+              <th>Precinct</th>
+              <th>Status</th>
+              <th>NCID</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <button id="prevPage" type="button" disabled>Previous</button>
+        <span id="pageInfo">Page 0 of 0</span>
+        <button id="nextPage" type="button" disabled>Next</button>
+      </div>
+    </section>
   </main>
 
   <script src="app.js"></script>

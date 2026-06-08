@@ -1,17 +1,16 @@
-# Infrequent Voter Lookup Prototype
+# Infrequent Voter Lookup
 
-Static GitHub Pages prototype for searching a pre-filtered voter list.
+Static GitHub Pages prototype for searching a county-split infrequent voter list.
 
-## Files
+## Expected data structure
 
-- `index.html` — main webpage
-- `style.css` — page styling
-- `app.js` — CSV loading, search/filtering, and downloads
-- `data/infrequent-voters.csv` — source data
+County CSV files should be placed in:
 
-## Expected CSV columns
+```text
+data/counties/
+```
 
-The page expects these column names exactly:
+Each county file should have these columns:
 
 ```text
 county_desc
@@ -22,19 +21,31 @@ voter_status_desc
 ncid
 ```
 
-## Updating the data
-
-Replace:
+The site reads the available county list from:
 
 ```text
-data/infrequent-voters.csv
+data/counties/counties.json
 ```
 
-with a new CSV using the same column names.
+Example:
+
+```json
+[
+  { "name": "SWAIN", "file": "swain.csv" },
+  { "name": "WAKE", "file": "wake.csv" }
+]
+```
+
+## Updating the data
+
+1. Split the statewide CSV into county CSV files.
+2. Put the county CSV files in `data/counties/`.
+3. Update `data/counties/counties.json` so each county points to the correct filename.
+4. Commit/upload the files to GitHub.
 
 ## Local testing
 
-From this folder, run:
+From the project folder, run:
 
 ```bash
 python3 -m http.server 8000
