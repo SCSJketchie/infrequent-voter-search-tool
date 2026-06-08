@@ -1,19 +1,40 @@
-# Voter Lookup Prototype
+# Infrequent Voter Lookup Prototype
 
-This is a tiny static searchable table prototype.
+Static GitHub Pages prototype for searching a pre-filtered voter list.
 
 ## Files
 
-- `index.html` — webpage structure
-- `style.css` — visual styling
-- `app.js` — loads CSV, filters data, renders table
-- `data/voters.csv` — sample data
+- `index.html` — main webpage
+- `style.css` — page styling
+- `app.js` — CSV loading, search/filtering, and downloads
+- `data/infrequent-voters.csv` — source data
 
-## Local testing note
+## Expected CSV columns
 
-Because the page uses JavaScript `fetch()` to load the CSV, some browsers may block it when opening `index.html` directly from your computer.
+The page expects these column names exactly:
 
-The easiest local test is to run a tiny local web server from this folder:
+```text
+county_desc
+full-name
+residential-address
+precinct_desc
+voter_status_desc
+ncid
+```
+
+## Updating the data
+
+Replace:
+
+```text
+data/infrequent-voters.csv
+```
+
+with a new CSV using the same column names.
+
+## Local testing
+
+From this folder, run:
 
 ```bash
 python3 -m http.server 8000
@@ -24,9 +45,3 @@ Then open:
 ```text
 http://localhost:8000
 ```
-
-## GitHub Pages
-
-Upload these files to a GitHub repository, then enable Pages from the repository settings.
-
-Future updates should usually only require replacing `data/voters.csv` with a new file using the same column names.
