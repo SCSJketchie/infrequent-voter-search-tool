@@ -27,7 +27,7 @@ const els = {
   globalSearch: document.getElementById("globalSearch"),
   statusFilter: document.getElementById("statusFilter"),
   precinctFilter: document.getElementById("precinctFilter"),
-  downloadLoaded: document.getElementById("downloadLoaded"),
+  downloadStatewide: document.getElementById("downloadStatewide"),
   downloadFiltered: document.getElementById("downloadFiltered"),
   resultCount: document.getElementById("resultCount"),
   tbody: document.querySelector("#resultsTable tbody"),
@@ -45,6 +45,7 @@ async function init() {
     countyManifest = await response.json();
     renderCountyList();
     els.loadStatus.textContent = `${countyManifest.length} county file(s) available.`;
+    els.downloadStatewide.disabled = false;
     setProgress(`Ready. ${countyManifest.length} county file(s) available.`, "success");
   } catch (error) {
     els.loadStatus.textContent = "Could not load county list. Check data/counties/counties.json.";
@@ -79,8 +80,8 @@ els.loadCounties.addEventListener("click", loadSelectedCounties);
 els.globalSearch.addEventListener("input", applyFilters);
 els.statusFilter.addEventListener("change", applyFilters);
 els.precinctFilter.addEventListener("change", applyFilters);
-els.downloadLoaded.addEventListener("click", () => downloadCsv(loadedRows, "loaded-voter-list.csv"));
-els.downloadFiltered.addEventListener("click", () => downloadCsv(filteredRows, "selected-voter-list.csv"));
+els.downloadStatewide.addEventListener("click", downloadStatewideCsv);
+els.downloadFiltered.addEventListener("click", () => downloadCsv(filteredRows, "selected-filtered-voter-list.csv"));
 els.prevPage.addEventListener("click", () => { if (currentPage > 1) { currentPage--; renderTable(); } });
 els.nextPage.addEventListener("click", () => {
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
@@ -156,7 +157,7 @@ async function fetchText(path) {
 }
 
 function setControlsEnabled(enabled) {
-  [els.globalSearch, els.statusFilter, els.precinctFilter, els.downloadLoaded, els.downloadFiltered].forEach(el => {
+  [els.globalSearch, els.statusFilter, els.precinctFilter, els.downloadFiltered].forEach(el => {
     el.disabled = !enabled;
   });
 }
@@ -217,6 +218,66 @@ function renderTable() {
   els.nextPage.disabled = currentPage >= totalPages || filteredRows.length === 0;
 }
 
+async function downloadStatewideCsv() {
+  if (!countyManifest.length) {
+    alert("County list is not loaded yet.");
+    return;
+  }
+
+  const originalLabel = els.downloadStatewide.textContent;
+  els.downloadStatewide.disabled = true;
+  els.downloadStatewide.textContent = "Preparing statewide download...";
+  setProgress("Preparing full statewide voter list download...", "loading");
+
+  try {
+    const chunks = [];
+
+    for (let i = 0; i < countyManifest.length; i++) {
+      const county = countyManifest[i];
+      const countyLabel = toTitleCase(county.name);
+      setProgress(`Adding ${countyLabel} to statewide download (${i + 1} of ${countyManifest.length})...`, "loading");
+
+      const text = await fetchText(COUNTY_BASE_PATH + county.file);
+
+      if (i === 0) {
+        chunks.push(text.trimEnd());
+      } else {
+        chunks.push(stripHeaderRow(text).trimEnd());
+      }
+
+      await nextFrame();
+    }
+
+    const csv = chunks.filter(Boolean).join("\n");
+    downloadBlob(csv, "full-statewide-voter-list.csv");
+    setProgress("Full statewide voter list download is ready.", "success");
+  } catch (error) {
+    console.error(error);
+    setProgress(`Statewide download failed: ${error.message}`, "error");
+  } finally {
+    els.downloadStatewide.disabled = false;
+    els.downloadStatewide.textContent = originalLabel;
+  }
+}
+
+function stripHeaderRow(text) {
+  const newlineIndex = text.indexOf("\n");
+  if (newlineIndex === -1) return "";
+  return text.slice(newlineIndex + 1);
+}
+
+function downloadBlob(text, filename) {
+  const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 function downloadCsv(rows, filename) {
   if (!rows.length) {
     alert("No records to download.");
@@ -227,15 +288,7 @@ function downloadCsv(rows, filename) {
     .concat(rows.map(row => columns.map(col => csvEscape(row[col] || "")).join(",")))
     .join("\n");
 
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  downloadBlob(csv, filename);
 }
 
 function parseCsv(text) {
