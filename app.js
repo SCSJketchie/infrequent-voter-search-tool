@@ -23,6 +23,7 @@ const els = {
   clearCounties: document.getElementById("clearCounties"),
   loadCounties: document.getElementById("loadCounties"),
   loadStatus: document.getElementById("loadStatus"),
+  loadProgress: document.getElementById("loadProgress"),
   globalSearch: document.getElementById("globalSearch"),
   statusFilter: document.getElementById("statusFilter"),
   precinctFilter: document.getElementById("precinctFilter"),
@@ -44,8 +45,10 @@ async function init() {
     countyManifest = await response.json();
     renderCountyList();
     els.loadStatus.textContent = `${countyManifest.length} county file(s) available.`;
+    setProgress(`Ready. ${countyManifest.length} county file(s) available.`, "success");
   } catch (error) {
     els.loadStatus.textContent = "Could not load county list. Check data/counties/counties.json.";
+    setProgress("Could not load county list. Check data/counties/counties.json.", "error");
     console.error(error);
   }
 }
@@ -90,6 +93,7 @@ async function loadSelectedCounties() {
 
   if (selected.length === 0) {
     alert("Select at least one county first.");
+    setProgress("Select at least one county, then click Load selected counties.");
     return;
   }
 
@@ -99,27 +103,50 @@ async function loadSelectedCounties() {
   currentPage = 1;
   els.tbody.innerHTML = "";
   els.resultCount.textContent = "Loading selected county file(s)...";
+  setProgress(`Preparing to load ${selected.length} county file(s)...`, "loading");
 
   try {
-    for (const county of selected) {
-      els.loadStatus.textContent = `Loading ${toTitleCase(county.name)}...`;
+    for (let i = 0; i < selected.length; i++) {
+      const county = selected[i];
+      const countyLabel = toTitleCase(county.name);
+      els.loadStatus.textContent = `Loading ${countyLabel}...`;
+      setProgress(`Loading ${countyLabel} (${i + 1} of ${selected.length})...`, "loading");
+
       const text = await fetchText(COUNTY_BASE_PATH + county.file);
       const rows = parseCsv(text);
       // Avoid spreading very large arrays; older Safari can throw a RangeError.
       for (const row of rows) {
         loadedRows.push(row);
       }
+
+      setProgress(`Loaded ${countyLabel}: ${rows.length.toLocaleString()} record(s). Total loaded so far: ${loadedRows.length.toLocaleString()}.`, "loading");
+      await nextFrame();
     }
 
     populateFilterOptions();
     setControlsEnabled(true);
     applyFilters();
-    els.loadStatus.textContent = `Loaded ${loadedRows.length.toLocaleString()} voter record(s) from ${selected.length} county file(s).`;
+    const doneMessage = `Loaded ${loadedRows.length.toLocaleString()} voter record(s) from ${selected.length} county file(s).`;
+    els.loadStatus.textContent = doneMessage;
+    setProgress(doneMessage, "success");
   } catch (error) {
     console.error(error);
-    els.loadStatus.textContent = `A county file failed to load: ${error.message}`;
+    const errorMessage = `A county file failed to load: ${error.message}`;
+    els.loadStatus.textContent = errorMessage;
+    setProgress(errorMessage, "error");
     els.resultCount.textContent = "Load failed.";
   }
+}
+
+function setProgress(message, state = "") {
+  if (!els.loadProgress) return;
+  els.loadProgress.textContent = message;
+  els.loadProgress.classList.remove("is-loading", "is-error", "is-success");
+  if (state) els.loadProgress.classList.add(`is-${state}`);
+}
+
+function nextFrame() {
+  return new Promise(resolve => requestAnimationFrame(resolve));
 }
 
 async function fetchText(path) {
