@@ -4,55 +4,40 @@ Static GitHub Pages prototype for searching a county-split infrequent voter list
 
 ## Expected data structure
 
-County CSV files should be placed in:
+County CSV files should be stored in:
 
 ```text
 data/counties/
 ```
 
-Each county file should have these columns:
-
-```text
-county_desc
-full-name
-residential-address
-precinct_desc
-voter_status_desc
-ncid
-```
-
-The site reads the available county list from:
+The county manifest should be stored at:
 
 ```text
 data/counties/counties.json
 ```
 
-Example:
-
-```json
-[
-  { "name": "SWAIN", "file": "swain.csv" },
-  { "name": "WAKE", "file": "wake.csv" }
-]
-```
-
-## Updating the data
-
-1. Split the statewide CSV into county CSV files.
-2. Put the county CSV files in `data/counties/`.
-3. Update `data/counties/counties.json` so each county points to the correct filename.
-4. Commit/upload the files to GitHub.
-
-## Local testing
-
-From the project folder, run:
-
-```bash
-python3 -m http.server 8000
-```
-
-Then open:
+Each county CSV should use these columns:
 
 ```text
-http://localhost:8000
+county_desc
+full-name
+res_street_address
+res_city_desc
+zip_code
 ```
+
+## Updating data
+
+1. Split the statewide file into county CSV files.
+2. Generate/update `data/counties/counties.json`.
+3. Upload the updated county CSVs and JSON file to GitHub.
+
+The webpage lets users select one or more counties, load those records, search/filter by the loaded data, and download either the full statewide file assembled from county files or the currently selected/filtered results.
+
+
+## Current interaction notes
+
+- Search applies only to the `full-name` column.
+- The only dropdown filter is City / Town, based on `res_city_desc`.
+- Search and filters update results automatically as users type or change selections.
+- Clear counties clears county selections, loaded records, results, filters, and search text.

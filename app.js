@@ -5,10 +5,9 @@ const PAGE_SIZE = 100;
 const columns = [
   "county_desc",
   "full-name",
-  "residential-address",
-  "precinct_desc",
-  "voter_status_desc",
-  "ncid"
+  "res_street_address",
+  "res_city_desc",
+  "zip_code"
 ];
 
 let countyManifest = [];
@@ -25,8 +24,7 @@ const els = {
   loadStatus: document.getElementById("loadStatus"),
   loadProgress: document.getElementById("loadProgress"),
   globalSearch: document.getElementById("globalSearch"),
-  statusFilter: document.getElementById("statusFilter"),
-  precinctFilter: document.getElementById("precinctFilter"),
+  cityFilter: document.getElementById("cityFilter"),
   downloadStatewide: document.getElementById("downloadStatewide"),
   downloadFiltered: document.getElementById("downloadFiltered"),
   resultCount: document.getElementById("resultCount"),
@@ -74,12 +72,12 @@ els.selectAllCounties.addEventListener("click", () => {
 
 els.clearCounties.addEventListener("click", () => {
   els.countyList.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+  resetLoadedData();
 });
 
 els.loadCounties.addEventListener("click", loadSelectedCounties);
-els.globalSearch.addEventListener("input", applyFilters);
-els.statusFilter.addEventListener("change", applyFilters);
-els.precinctFilter.addEventListener("change", applyFilters);
+els.globalSearch.addEventListener("input", debounce(applyFilters, 250));
+els.cityFilter.addEventListener("change", applyFilters);
 els.downloadStatewide.addEventListener("click", downloadStatewideCsv);
 els.downloadFiltered.addEventListener("click", () => downloadCsv(filteredRows, "selected-filtered-voter-list.csv"));
 els.prevPage.addEventListener("click", () => { if (currentPage > 1) { currentPage--; renderTable(); } });
@@ -98,6 +96,8 @@ async function loadSelectedCounties() {
     return;
   }
 
+  els.globalSearch.value = "";
+  els.cityFilter.innerHTML = '<option value="">All cities/towns</option>';
   setControlsEnabled(false);
   loadedRows = [];
   filteredRows = [];
@@ -139,6 +139,33 @@ async function loadSelectedCounties() {
   }
 }
 
+function resetLoadedData() {
+  loadedRows = [];
+  filteredRows = [];
+  currentPage = 1;
+
+  els.globalSearch.value = "";
+  els.cityFilter.innerHTML = '<option value="">All cities/towns</option>';
+  setControlsEnabled(false);
+
+  els.tbody.innerHTML = "";
+  els.resultCount.textContent = "No counties loaded.";
+  els.pageInfo.textContent = "Page 0 of 0";
+  els.prevPage.disabled = true;
+  els.nextPage.disabled = true;
+
+  els.loadStatus.textContent = `${countyManifest.length} county file(s) available.`;
+  setProgress("County selections cleared. No voter records are currently loaded.", "success");
+}
+
+function debounce(fn, wait) {
+  let timeout;
+  return function (...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn.apply(this, args), wait);
+  };
+}
+
 function setProgress(message, state = "") {
   if (!els.loadProgress) return;
   els.loadProgress.textContent = message;
@@ -157,14 +184,13 @@ async function fetchText(path) {
 }
 
 function setControlsEnabled(enabled) {
-  [els.globalSearch, els.statusFilter, els.precinctFilter, els.downloadFiltered].forEach(el => {
+  [els.globalSearch, els.cityFilter, els.downloadFiltered].forEach(el => {
     el.disabled = !enabled;
   });
 }
 
 function populateFilterOptions() {
-  fillSelect(els.statusFilter, "voter_status_desc", "All statuses");
-  fillSelect(els.precinctFilter, "precinct_desc", "All precincts");
+  fillSelect(els.cityFilter, "res_city_desc", "All cities/towns");
 }
 
 function fillSelect(select, field, defaultLabel) {
@@ -175,16 +201,14 @@ function fillSelect(select, field, defaultLabel) {
 
 function applyFilters() {
   const search = els.globalSearch.value.trim().toLowerCase();
-  const status = els.statusFilter.value;
-  const precinct = els.precinctFilter.value;
+  const city = els.cityFilter.value;
 
   filteredRows = loadedRows.filter(row => {
-    if (status && row.voter_status_desc !== status) return false;
-    if (precinct && row.precinct_desc !== precinct) return false;
+    if (city && row.res_city_desc !== city) return false;
 
     if (search) {
-      const haystack = columns.map(col => row[col] || "").join(" ").toLowerCase();
-      if (!haystack.includes(search)) return false;
+      const name = (row["full-name"] || "").toLowerCase();
+      if (!name.includes(search)) return false;
     }
 
     return true;
@@ -205,10 +229,9 @@ function renderTable() {
     <tr>
       <td>${escapeHtml(row.county_desc)}</td>
       <td>${escapeHtml(row["full-name"])}</td>
-      <td>${escapeHtml(row["residential-address"])}</td>
-      <td>${escapeHtml(row.precinct_desc)}</td>
-      <td>${escapeHtml(row.voter_status_desc)}</td>
-      <td>${escapeHtml(row.ncid)}</td>
+      <td>${escapeHtml(row["res_street_address"])}</td>
+      <td>${escapeHtml(row.res_city_desc)}</td>
+      <td>${escapeHtml(row.zip_code)}</td>
     </tr>
   `).join("");
 

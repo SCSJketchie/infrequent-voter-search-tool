@@ -10,7 +10,7 @@
   <main class="container">
     <header class="site-header">
       <h1>Infrequent Voter Lookup</h1>
-      <p class="lede">Select one or more counties, load the voter list, then search, filter, and download results.</p>
+      <p class="lede">Select one or more counties, load the voter list, then search by name, filter by city/town, and download results.</p>
     </header>
 
     <section class="panel">
@@ -30,19 +30,13 @@
       <h2>2. Search, filter, and download</h2>
       <div class="controls-grid">
         <label>
-          Search
-          <input id="globalSearch" type="search" placeholder="Name, address, NCID, county, precinct..." disabled />
+          Name Search
+          <input id="globalSearch" type="search" placeholder="Search full name..." disabled />
         </label>
         <label>
-          Status
-          <select id="statusFilter" disabled>
-            <option value="">All statuses</option>
-          </select>
-        </label>
-        <label>
-          Precinct
-          <select id="precinctFilter" disabled>
-            <option value="">All precincts</option>
+          City / Town
+          <select id="cityFilter" disabled>
+            <option value="">All cities/towns</option>
           </select>
         </label>
       </div>
@@ -63,10 +57,9 @@
             <tr>
               <th>County</th>
               <th>Name</th>
-              <th>Residential Address</th>
-              <th>Precinct</th>
-              <th>Status</th>
-              <th>NCID</th>
+              <th>Street Address</th>
+              <th>City</th>
+              <th>ZIP Code</th>
             </tr>
           </thead>
           <tbody></tbody>
