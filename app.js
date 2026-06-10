@@ -105,7 +105,10 @@ async function loadSelectedCounties() {
       els.loadStatus.textContent = `Loading ${toTitleCase(county.name)}...`;
       const text = await fetchText(COUNTY_BASE_PATH + county.file);
       const rows = parseCsv(text);
-      loadedRows.push(...rows);
+      // Avoid spreading very large arrays; older Safari can throw a RangeError.
+      for (const row of rows) {
+        loadedRows.push(row);
+      }
     }
 
     populateFilterOptions();
@@ -114,7 +117,7 @@ async function loadSelectedCounties() {
     els.loadStatus.textContent = `Loaded ${loadedRows.length.toLocaleString()} voter record(s) from ${selected.length} county file(s).`;
   } catch (error) {
     console.error(error);
-    els.loadStatus.textContent = "A county file failed to load. Check filenames in counties.json.";
+    els.loadStatus.textContent = `A county file failed to load: ${error.message}`;
     els.resultCount.textContent = "Load failed.";
   }
 }
